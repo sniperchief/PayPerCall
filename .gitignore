@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Secrets and local environment
+.env
+.env.*
+
+# Foundry build output and caches
+contracts/out/
+contracts/cache/
+cache/
+broadcast/
+lcov.info
+
+# Vite build output and local logs
+dist/
+console.jsonl
+*.log
