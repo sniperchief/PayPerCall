@@ -3,8 +3,8 @@
  * Run with: bun run dev:api   (set PPC_ALLOW_MEMORY_STORE=1 in .env to use the in-memory store locally)
  */
 import { createServer } from 'node:http'
-import { getDefaultContextProvider } from './context'
-import { createHandler } from './http'
+import { getDefaultContextProvider } from './context.js'
+import { createHandler } from './http.js'
 
 const handle = createHandler(getDefaultContextProvider())
 const port = Number(process.env.PPC_API_PORT ?? 3001)

@@ -3,12 +3,12 @@
  * the RPC must report chain 5042, the configured address must hold the PayPerCall contract, and the
  * contract's immutable settings must match the values Phase 2 was reviewed with.
  */
-import { PRICE_RAW, REFUND_DELAY_SECONDS } from '../shared/protocol'
-import { createViemChainReader, createViemSettler, type ChainReader, type ContractSettings, type Settler } from './chain'
-import { loadConfig, type Env, type ServerConfig } from './config'
-import { defaultNewId, type Deps } from './requests'
-import { createReportGenerator } from './report'
-import { createStore, type Store } from './store'
+import { PRICE_RAW, REFUND_DELAY_SECONDS } from '../shared/protocol.js'
+import { createViemChainReader, createViemSettler, type ChainReader, type ContractSettings, type Settler } from './chain.js'
+import { loadConfig, type Env, type ServerConfig } from './config.js'
+import { defaultNewId, type Deps } from './requests.js'
+import { createReportGenerator } from './report.js'
+import { createStore, type Store } from './store.js'
 
 export interface ReadyContext {
   ready: true

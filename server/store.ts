@@ -3,7 +3,7 @@
  * Production uses Upstash Redis over its REST API. The in-memory store is for local development and tests only.
  */
 import { randomBytes } from 'node:crypto'
-import type { StoreConfig } from './config'
+import type { StoreConfig } from './config.js'
 
 export interface Store {
   readonly kind: 'memory' | 'upstash'

@@ -3,9 +3,9 @@
  * Routes live under /api/v1. Responses are never cached; unknown ids and wrong tokens are indistinguishable.
  */
 import { timingSafeEqual } from 'node:crypto'
-import { isHash32, type ApiErrorBody } from '../shared/protocol'
-import type { ContextProvider, ReadyContext } from './context'
-import { advance, authorize, buildView, createRequest, getReport, processScheduled } from './requests'
+import { isHash32, type ApiErrorBody } from '../shared/protocol.js'
+import type { ContextProvider, ReadyContext } from './context.js'
+import { advance, authorize, buildView, createRequest, getReport, processScheduled } from './requests.js'
 
 const PREFIX = '/api/v1'
 const MAX_BODY_BYTES = 2048

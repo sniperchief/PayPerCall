@@ -3,7 +3,7 @@
  * the API refuses to serve requests instead of guessing a value.
  */
 import { type Address, type Hex } from 'viem'
-import { isZeroAddress, parseAddress, productionFacts } from '../shared/protocol'
+import { isZeroAddress, parseAddress, productionFacts } from '../shared/protocol.js'
 
 export const CONTRACT_ENV = 'VITE_PAY_PER_CALL_ADDRESS'
 

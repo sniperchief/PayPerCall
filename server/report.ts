@@ -3,8 +3,8 @@
  * Sections whose data sources are not built yet are reported as "unavailable" with the reason, never filled in.
  */
 import { keccak256, toHex, type Address, type Hex } from 'viem'
-import { formatTradeSizeUsd } from '../shared/protocol'
-import type { ChainReader, TokenInspection } from './chain'
+import { formatTradeSizeUsd } from '../shared/protocol.js'
+import type { ChainReader, TokenInspection } from './chain.js'
 
 export type Severity = 'info' | 'low' | 'medium' | 'high'
 export type SectionStatus = 'ok' | 'partial' | 'unavailable'

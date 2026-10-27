@@ -3,7 +3,19 @@ import { test } from 'node:test'
 import type { Hex } from 'viem'
 import { ONCHAIN_STATUS } from '../shared/abi'
 import { computeRequestId } from '../shared/protocol'
-import { advance, authorize, buildView, createRequest, getReport, hashAccessToken, recordKey, reportKey, type RequestRecord } from './requests'
+import {
+  SWEEP_BUDGET_MS,
+  advance,
+  authorize,
+  buildView,
+  createRequest,
+  getReport,
+  hashAccessToken,
+  processScheduled,
+  recordKey,
+  reportKey,
+  type RequestRecord,
+} from './requests'
 import { CONTRACT, PAYER, TOKEN, fill, makeHarness, type Harness } from './testing'
 
 async function newRequest(h: Harness) {
@@ -287,4 +299,136 @@ test('a chain read failure leaves the stored state untouched', async () => {
   await assert.rejects(advance(h.deps, created.requestId))
   h.chain.readFailure = null
   assert.equal((await record(h, created.requestId)).status, 'CREATED')
+})
+
+/** Makes the settlement land at the moment its receipt is first looked up, after the contract state was read. */
+function landOnReceiptLookup(h: Harness, requestId: Hex, txHash: Hex, reportHash: Hex) {
+  const realTxState = h.settler.getTxState
+  h.settler.getTxState = (hash) => {
+    if (hash === txHash && h.settler.txStates.get(hash) !== 'success') {
+      h.chain.settle(requestId, reportHash, txHash)
+      h.settler.txStates.set(hash, 'success')
+    }
+    return realTxState(hash)
+  }
+}
+
+test('a settlement mined between the contract read and the receipt read completes instead of failing', async () => {
+  const h = makeHarness()
+  h.settler.autoMine = false
+  const created = await paidRequest(h)
+  const first = (await advance(h.deps, created.requestId))!
+  assert.equal(first.status, 'SETTLING')
+  landOnReceiptLookup(h, created.requestId, first.settle!.txHash, first.report!.hash)
+
+  const done = await advance(h.deps, created.requestId)
+  assert.equal(done?.status, 'COMPLETED')
+  assert.equal(done.failure, null)
+  assert.equal(done.settledTxHash, first.settle!.txHash)
+  assert.equal(h.settler.prepares, 1)
+  assert.equal((await getReport(h.deps, done)).ok, true)
+})
+
+test('a successful receipt from a node whose contract view still lags waits and never fails the request', async () => {
+  const h = makeHarness()
+  h.settler.autoMine = false
+  const created = await paidRequest(h)
+  const first = (await advance(h.deps, created.requestId))!
+  const txHash = first.settle!.txHash
+  const paidView = await h.chain.getRequest(CONTRACT, created.requestId)
+  h.chain.settle(created.requestId, first.report!.hash, txHash)
+  h.settler.txStates.set(txHash, 'success')
+
+  // Receipt visible, contract state not yet: no report, no failure.
+  let lagging = true
+  const realGetRequest = h.chain.getRequest.bind(h.chain)
+  h.chain.getRequest = (contract, id) => (lagging ? Promise.resolve(paidView) : realGetRequest(contract, id))
+  const waiting = await advance(h.deps, created.requestId)
+  assert.equal(waiting?.status, 'SETTLING')
+  assert.equal(waiting.failure, null)
+  assert.deepEqual(await getReport(h.deps, waiting), { ok: false, reason: 'NOT_READY' })
+
+  lagging = false
+  const done = await advance(h.deps, created.requestId)
+  assert.equal(done?.status, 'COMPLETED')
+  assert.equal(h.settler.prepares, 1)
+})
+
+test('a backlog of unpaid requests cannot starve a paid request out of the scheduled sweep', async () => {
+  const h = makeHarness()
+  for (let i = 0; i < 25; i++) await newRequest(h)
+  const paid = await paidRequest(h)
+  const result = await processScheduled(h.deps)
+  assert.deepEqual(result, { skipped: false, processed: 26, failedIds: 0 })
+  assert.equal((await record(h, paid.requestId)).status, 'COMPLETED')
+})
+
+test('the scheduled sweep stops starting requests once its time budget is spent', async () => {
+  const h = makeHarness()
+  for (let i = 0; i < 5; i++) await newRequest(h)
+  const realGetRequest = h.chain.getRequest.bind(h.chain)
+  h.chain.getRequest = (contract, id) => {
+    h.clock.advanceSeconds(SWEEP_BUDGET_MS / 1000 / 2)
+    return realGetRequest(contract, id)
+  }
+  assert.deepEqual(await processScheduled(h.deps), { skipped: false, processed: 2, failedIds: 0 })
+})
+
+test('a settlement that reverts while the request is still Paid fails to the refund path and releases nothing', async () => {
+  const h = makeHarness()
+  h.settler.autoMine = false
+  const created = await paidRequest(h)
+  const first = (await advance(h.deps, created.requestId))!
+  h.settler.txStates.set(first.settle!.txHash, 'reverted')
+  const result = await advance(h.deps, created.requestId)
+  assert.equal(result?.status, 'FAILED')
+  assert.equal(result?.failure, 'SETTLE_REVERTED')
+  assert.equal(h.settler.prepares, 1)
+  assert.equal((await getReport(h.deps, result)).ok, false)
+})
+
+test('a settlement still pending at the refund deadline fails the request and is never re-signed', async () => {
+  const h = makeHarness()
+  h.settler.autoMine = false
+  const created = await paidRequest(h)
+  await advance(h.deps, created.requestId)
+  h.clock.advanceSeconds(1800)
+  const result = await advance(h.deps, created.requestId)
+  assert.equal(result?.status, 'FAILED')
+  assert.equal(result?.failure, 'SETTLEMENT_WINDOW_CLOSED')
+  assert.equal(h.settler.prepares, 1)
+  assert.equal((await getReport(h.deps, result)).ok, false)
+})
+
+test('an operator nonce taken by other transactions is re-signed at most three times, then fails closed', async () => {
+  const h = makeHarness()
+  h.settler.autoMine = false
+  const created = await paidRequest(h)
+  const realBroadcast = h.settler.broadcast.bind(h.settler)
+  h.settler.broadcast = async (raw) => {
+    await realBroadcast(raw)
+    throw new Error('nonce too low')
+  }
+  for (let i = 0; i < 12; i++) {
+    h.clock.advanceSeconds(6)
+    await advance(h.deps, created.requestId)
+  }
+  const result = await record(h, created.requestId)
+  assert.equal(result.status, 'FAILED')
+  assert.equal(result.failure, 'SETTLE_BROADCAST_FAILED')
+  assert.equal(h.settler.prepares, 3)
+  assert.equal(result.priorSettleTxHashes?.length, 3)
+})
+
+test('a payment that lands after the request expired is never processed', async () => {
+  const h = makeHarness()
+  const created = await newRequest(h)
+  h.clock.advanceSeconds(31 * 60)
+  assert.equal((await advance(h.deps, created.requestId))?.status, 'EXPIRED')
+  h.chain.pay(created.requestId, PAYER, created.paramsHash)
+  const result = await advance(h.deps, created.requestId)
+  assert.equal(result?.status, 'EXPIRED')
+  assert.equal((await buildView(h.deps, result)).payment.state, 'paid')
+  assert.equal(h.generatorCalls(), 0)
+  assert.equal(h.settler.prepares, 0)
 })

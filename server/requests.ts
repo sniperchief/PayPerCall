@@ -6,9 +6,9 @@
  * Any pre-settlement state can end in FAILED (refund path), REFUNDED or EXPIRED.
  * A report is released only from COMPLETED and only while the contract still reports Settled.
  */
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { toHex, type Address, type Hex } from 'viem'
-import { ONCHAIN_STATUS } from '../shared/abi'
+import { ONCHAIN_STATUS } from '../shared/abi.js'
 import {
   PRICE_RAW,
   REFUND_DELAY_SECONDS,
@@ -23,10 +23,10 @@ import {
   type PaymentState,
   type RequestStatus,
   type RequestView,
-} from '../shared/protocol'
-import type { ChainReader, OnchainRequest, Settler } from './chain'
-import { canonicalJson, hashReport, type ReportGenerator } from './report'
-import { randomId, type Store } from './store'
+} from '../shared/protocol.js'
+import type { ChainReader, OnchainRequest, Settler } from './chain.js'
+import { canonicalJson, hashReport, type ReportGenerator } from './report.js'
+import { randomId, type Store } from './store.js'
 
 export const RECORD_TTL_SEC = 30 * 24 * 3600
 export const UNPAID_TTL_MS = 30 * 60 * 1000
@@ -369,11 +369,14 @@ async function checkSettlement(deps: Deps, rec: RequestRecord, chainReq: Onchain
   const state = await deps.settler.getTxState(settle.txHash)
 
   if (state === 'success') {
-    const log = chainReq.status === ONCHAIN_STATUS.Settled ? await deps.reader.getSettledLog(deps.contract, rec.id, settle.txHash) : null
-    const ok =
-      log !== null &&
-      log.reportHash.toLowerCase() === rec.report.hash.toLowerCase() &&
-      log.payer.toLowerCase() === rec.payer.toLowerCase()
+    // `chainReq` was read before the receipt and may predate the transaction: read the contract again, and wait
+    // (rather than fail) while the node has not caught up with its own receipt.
+    const [fresh, log] = await Promise.all([
+      chainReq.status === ONCHAIN_STATUS.Settled ? chainReq : deps.reader.getRequest(deps.contract, rec.id),
+      deps.reader.getSettledLog(deps.contract, rec.id, settle.txHash),
+    ])
+    if (fresh.status !== ONCHAIN_STATUS.Settled || log === null) return stay
+    const ok = log.reportHash.toLowerCase() === rec.report.hash.toLowerCase() && log.payer.toLowerCase() === rec.payer.toLowerCase()
     const next = await mutate(deps, rec.id, (c) =>
       c.status !== 'SETTLING'
         ? null
@@ -494,18 +497,32 @@ export async function getReport(deps: Deps, rec: RequestRecord): Promise<ReportR
   return { ok: true, report: JSON.parse(json) as unknown, reportHash: rec.report.hash, settleTxHash: rec.settledTxHash }
 }
 
-/** Processes outstanding requests; used by the cron endpoint. */
-export async function processActive(deps: Deps, limit = 20): Promise<{ processed: number; failedIds: number }> {
-  const ids = (await deps.store.members(ACTIVE_SET)).slice(0, limit)
+/** Stops starting new requests after this long, leaving room inside the 60 second function limit. */
+export const SWEEP_BUDGET_MS = 40_000
+
+/**
+ * Processes outstanding requests; used by the cron endpoint. Set members come back in a stable order, so they
+ * are shuffled: a fixed slice would let a backlog of unpaid requests starve paid ones on every run.
+ */
+export async function processActive(deps: Deps, limit = 200): Promise<{ processed: number; failedIds: number }> {
+  const ids = await deps.store.members(ACTIVE_SET)
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1)
+    ;[ids[i], ids[j]] = [ids[j], ids[i]]
+  }
+  const startedMs = deps.now()
+  let processed = 0
   let failedIds = 0
-  for (const id of ids) {
+  for (const id of ids.slice(0, limit)) {
+    if (deps.now() - startedMs >= SWEEP_BUDGET_MS) break
+    processed++
     try {
       await advance(deps, id)
     } catch {
       failedIds++
     }
   }
-  return { processed: ids.length, failedIds }
+  return { processed, failedIds }
 }
 
 export type ScheduledResult = { skipped: false; processed: number; failedIds: number } | { skipped: true; reason: 'ALREADY_RUNNING' }

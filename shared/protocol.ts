@@ -5,7 +5,7 @@
  * 6-decimal ERC-20 interface at 0x3600000000000000000000000000000000000000.
  */
 import { encodeAbiParameters, getAddress, isAddress, keccak256, type Address, type Hex } from 'viem'
-import { getChain, getUsdc } from '../src/onchain-facts'
+import { getChain, getUsdc } from '../src/onchain-facts.js'
 
 /** Production network. Phase 3 targets Arc mainnet only. */
 export const PRODUCTION_CHAIN_ID = 5042

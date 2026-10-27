@@ -16,7 +16,7 @@ import {
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { arc } from 'viem/chains'
-import { payPerCallAbi, type OnchainStatus } from '../shared/abi'
+import { payPerCallAbi, type OnchainStatus } from '../shared/abi.js'
 
 export interface OnchainRequest {
   payer: Address

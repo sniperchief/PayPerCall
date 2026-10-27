@@ -2,8 +2,8 @@
  * Vercel Function entry. All /api/* requests are handled by the shared router in server/http.ts.
  * Configuration comes from environment variables; see .env.example.
  */
-import { getDefaultContextProvider } from '../server/context'
-import { createHandler } from '../server/http'
+import { getDefaultContextProvider } from '../server/context.js'
+import { createHandler } from '../server/http.js'
 
 const handle = createHandler(getDefaultContextProvider())
 
