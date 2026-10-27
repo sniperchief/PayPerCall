@@ -37,5 +37,9 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     cors: true,
+    proxy: {
+      // Same paths as the Vercel function (/api/v1/...); run `bun run dev:api` alongside `bun run dev`.
+      '/api': { target: 'http://localhost:3001', changeOrigin: true },
+    },
   },
 })

@@ -31,6 +31,8 @@
       ]
     }
   },
-  "include": ["src", "scripts"]
+  "include": ["src", "scripts", "shared", "server", "api"],
+  // Arc Studio sandbox script: it imports @circlefin/compass-chains, which is not published to npm.
+  "exclude": ["scripts/compass-deploy.ts"]
 }
 

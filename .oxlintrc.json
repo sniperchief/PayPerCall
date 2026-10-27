@@ -1,7 +1,15 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["dist", "contracts/**", "node_modules"],
-  "plugins": ["typescript", "react"],
+  "ignorePatterns": [
+    "dist",
+    "contracts/**",
+    "node_modules",
+    "scripts/compass-deploy.ts"
+  ],
+  "plugins": [
+    "typescript",
+    "react"
+  ],
   "categories": {
     "correctness": "off",
     "suspicious": "off",
@@ -54,14 +62,18 @@
     "typescript/restrict-template-expressions": "error",
     "typescript/triple-slash-reference": "error",
     "typescript/unbound-method": "error",
-
-    "eslint/no-unused-vars": ["warn", { "vars": "all", "varsIgnorePattern": "^_", "args": "after-used", "argsIgnorePattern": "^_" }],
-
+    "eslint/no-unused-vars": [
+      "warn",
+      {
+        "vars": "all",
+        "varsIgnorePattern": "^_",
+        "args": "after-used",
+        "argsIgnorePattern": "^_"
+      }
+    ],
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
-
     "react/react-in-jsx-scope": "off",
-
     "react/set-state-in-effect": "error",
     "react/refs": "error",
     "react/purity": "error",
@@ -74,5 +86,15 @@
     "react/unsupported-syntax": "warn",
     "react/set-state-in-render": "error",
     "react/globals": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/*.test.ts"
+      ],
+      "rules": {
+        "typescript/no-floating-promises": "off"
+      }
+    }
+  ]
 }

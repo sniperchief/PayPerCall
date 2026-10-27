@@ -4,6 +4,7 @@ node_modules/
 # Secrets and local environment
 .env
 .env.*
+!.env.example
 
 # Foundry build output and caches
 contracts/out/
