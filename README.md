@@ -46,6 +46,10 @@ Docs are in `docs/`: architecture, contract integration notes, the contract ABI,
 | `PPC_ALLOW_MEMORY_STORE` | Set to `1` for local development and tests only. |
 | `ARC_MAINNET_RPC_URL` | Optional https RPC override for the server. |
 | `PPC_OPERATOR_PRIVATE_KEY` | Optional, server only. Key of the contract operator, used to settle requests. Without it nothing is settled and no report is released. |
-| `CRON_SECRET` | Secret for the scheduled processing endpoint; Vercel Cron sends it as a bearer token. |
+| `CRON_SECRET` | Secret for the scheduled processing endpoint `/api/v1/cron/process`; callers send it as `Authorization: Bearer <secret>`. |
 | `PPC_API_PORT` | Optional local API port (default 3001). |
 | `ARC_TESTNET_RPC_URL` | Optional. Enables a read-only Foundry fork test against Arc Testnet USDC. |
+
+### Scheduled processing
+
+Requests advance whenever their status is polled; the browser polls every 2.5 seconds. Paid requests that nobody polls are advanced by `/api/v1/cron/process`, and must settle within about 25 minutes of payment or they fall back to the payer's refund. `vercel.json` schedules Vercel Cron daily (`0 0 * * *`) because the Vercel Hobby plan allows only daily crons. For timely processing, have an external scheduler (for example cron-job.org or Upstash QStash) call `GET /api/v1/cron/process` every 5 minutes with `Authorization: Bearer <CRON_SECRET>`. Overlapping runs are safe: a run lock skips concurrent sweeps and every state change is a compare-and-set.

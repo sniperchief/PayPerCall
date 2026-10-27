@@ -42,3 +42,14 @@ test('vercel.json sends every /api path, at any depth, to the catch-all function
   assert.ok(config.rewrites?.some((r) => r.source === '/api/:path*' && r.destination === '/api/[...path]'))
   assert.ok(config.crons?.every((cron) => cron.path.startsWith('/api/v1/')))
 })
+
+test('vercel.json crons run at most once a day, the limit of the Vercel Hobby plan', () => {
+  // Hobby rejects a deployment whose cron runs more often than daily. Faster processing for requests nobody
+  // polls comes from an external scheduler calling the same endpoint with the CRON_SECRET bearer.
+  const config = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8')) as { crons?: { schedule: string }[] }
+  assert.ok(config.crons && config.crons.length > 0)
+  for (const { schedule } of config.crons) {
+    const [minute, hour] = schedule.split(/\s+/)
+    assert.ok(/^\d+$/.test(minute) && /^\d+$/.test(hour), `cron '${schedule}' runs more than once a day`)
+  }
+})

@@ -6,6 +6,6 @@
     { "source": "/api/:path*", "destination": "/api/[...path]" }
   ],
   "crons": [
-    { "path": "/api/v1/cron/process", "schedule": "*/5 * * * *" }
+    { "path": "/api/v1/cron/process", "schedule": "0 0 * * *" }
   ]
 }

@@ -41,7 +41,7 @@ Real tooling: Vercel's builder output and a local Node load of the built functio
 - No PayPerCall deployment exists on Arc mainnet; the ready path has only run against fakes.
 - `createViemSettler` (signing, fee floor, nonce handling) has never run against a live chain.
 - Preview deployment checks still needed: `/api/v1/health` and a three-segment route reach the router with the original path, cron returns 401 without the secret.
-- Vercel Cron runs only on production deployments, and a 5-minute schedule needs a Pro or Enterprise plan.
+- Vercel Cron runs only on production deployments. After Phase 4 the schedule was changed to daily (`0 0 * * *`) to fit the Vercel Hobby plan; an external scheduler calling `/api/v1/cron/process` every 5 minutes with the `CRON_SECRET` bearer is needed so paid requests nobody polls settle before the refund deadline (see README, "Scheduled processing").
 - Upstash must keep eviction disabled (records, locks and the active set must not be evicted); `EVAL` scripting is used and has not been tried against a real Upstash database.
 - A request that reaches `FAILED` is never reconciled if a settlement of ours later becomes visible as Settled (for example through RPC lag at the refund deadline). This is narrower after fix 1 but not eliminated.
 - A settlement tx stuck below the fee market blocks later operator nonces until it is mined or dropped.
